@@ -1,8 +1,12 @@
+[![Docker Repository on Quay](https://quay.io/repository/netzbegruenung/green-spider-api/status "Docker Repository on Quay")](https://quay.io/repository/netzbegruenung/green-spider-api)
+
 # green-spider-api
 
 Web service API für Green Spider
 
 ## API Dokumentation
+
+Hinweis: Die API ist in einer frühen Entwicklungsphase. Änderungen (breaking changes) ohne vorherige Ankündigung sind zu erwarten.
 
 ### `GET /api/v1/spider-results/last-updated/`
 
@@ -35,6 +39,12 @@ Gibt die kompakte Liste aller Sites aus. Diese enthält nur die Details, die fü
   ...
 ]
 ```
+
+### `GET /api/v1/spider-results/site?url={site_url}`
+
+Gibt sämtliche Inhalte zu einer Site aus.
+
+Ein Beispiel würde hier den Rahmen sprengen.
 
 ## Konfiguration
 
