@@ -13,7 +13,7 @@ credentials_path = getenv('GCLOUD_DATASTORE_CREDENTIALS_PATH')
 datastore_client = datastore.Client.from_service_account_json(credentials_path)
 
 spider_results_kind = 'spider-results'
-webscreenshots_kind = 'webscreenshots'
+webscreenshots_kind = 'webscreenshot'
 
 
 def get_compact_results(client):
@@ -103,6 +103,31 @@ class SiteDetails(object):
         resp.media = dict(entity)
 
 
+class SiteScreenshots(object):
+
+    def on_get(self, req, resp):
+        """
+        Returns screenshots for one URL
+        """
+
+        url = req.get_param('url')
+        if url is None or url == '':
+            raise falcon.HTTPError(falcon.HTTP_400,
+                               'Bad request',
+                               'The parameter url must not be empty')
+
+        query = datastore_client.query(kind=webscreenshots_kind)
+        query.add_filter('url', '=', req.get_param('url'))
+        entities = list(query.fetch())
+
+        maxage = 24 * 60 * 60  # 24 hours in seconds
+        if len(entities) == 0:
+            maxage = 3 * 60 * 60  # 3 hours in seconds
+
+        resp.cache_control = ["max_age=%d" % maxage]
+        resp.media = entities
+
+
 handlers = media.Handlers({
     'application/json': jsonhandler.JSONHandler(),
 })
@@ -115,6 +140,8 @@ app.resp_options.media_handlers = handlers
 app.add_route('/api/v1/spider-results/last-updated/', LastUpdated())
 app.add_route('/api/v1/spider-results/compact/', CompactResults())
 app.add_route('/api/v1/spider-results/site', SiteDetails())
+app.add_route('/api/v1/screenshots/site', SiteScreenshots())
+
 
 if __name__ == '__main__':
     httpd = simple_server.make_server('127.0.0.1', 5000, app)
