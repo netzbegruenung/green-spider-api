@@ -2,7 +2,7 @@
 
 # green-spider-api
 
-Web service API für Green Spider
+Web service API für die [Green Spider Webapp](https://github.com/netzbegruenung/green-spider-webapp)
 
 ## API Dokumentation
 
@@ -45,6 +45,29 @@ Gibt die kompakte Liste aller Sites aus. Diese enthält nur die Details, die fü
 Gibt sämtliche Inhalte zu einer Site aus.
 
 Ein Beispiel würde hier den Rahmen sprengen.
+
+### `GET /api/v1/screenshots?url={site_url}`
+
+Gibt Daten zu allen vorhandenen Screenshots zu einer Site aus.
+
+```json
+[
+  {
+    "url": "http://wordpress.gruene-hameln-pyrmont.de/category/hessisch-oldendorf-gesamt/",
+    "screenshot_url": "http://green-spider-screenshots.sendung.de/1500x1500/4fc61b4918dc9eaaef645c694c84224e.png",
+    "user_agent": "phantomjs-2.1.1",
+    "size": [1500, 1500],
+    "created": "2018-10-08T08:33:21.284933+00:00"
+  },
+  {
+    "url": "http://wordpress.gruene-hameln-pyrmont.de/category/hessisch-oldendorf-gesamt/",
+    "screenshot_url": "http://green-spider-screenshots.sendung.de/360x640/4fc61b4918dc9eaaef645c694c84224e.png",
+    "user_agent": "phantomjs-2.1.1",
+    "size": [360, 640],
+    "created": "2018-10-08T08:33:19.353841+00:00"
+  }
+]
+```
 
 ## Konfiguration
 
