@@ -6,6 +6,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 ADD jsonhandler.py /
 ADD main.py /
 
-ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:5000", "main:app"]
+ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:5000", "--access-logfile=-", "main:app"]
 
 EXPOSE 5000
