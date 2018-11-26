@@ -1,6 +1,7 @@
 import collections
 from datetime import datetime
 from os import getenv
+import sys
 from wsgiref import simple_server
 
 import falcon
@@ -8,7 +9,6 @@ from falcon import media
 import jsonhandler
 
 from google.cloud import datastore
-
 
 credentials_path = getenv('GCLOUD_DATASTORE_CREDENTIALS_PATH')
 datastore_client = datastore.Client.from_service_account_json(credentials_path)
@@ -62,7 +62,40 @@ def get_compact_results(client):
     return out
 
 
-def get_full_results(client):
+def simplify_rating(d):
+    """
+    Removes some keys from a flattened rating dict
+    """
+    keys_to_delete = []
+    for key in d.keys():
+        if key.endswith(".type") or key.endswith(".max_score"):
+            keys_to_delete.append(key)
+    
+    for key in keys_to_delete:
+        del d[key]
+    
+    return d
+            
+
+def tablelize_checks(d):
+    """
+    Returns a dict with the check details we want to be contained
+    in a table export.
+    """
+    out = {}
+
+    # CMS names separated by space
+    out['generator'] = " ".join(list(set([i for i in d['generator'].values() if i is not None])))
+
+    # List of actual URLs crawled
+    out['resulting_urls'] = ""
+    if 'url_canonicalization' in d:
+        out['resulting_urls'] = " ".join([i for i in d['url_canonicalization'] if i is not None])
+
+    return out
+
+
+def get_table_result(client):
     query = client.query(kind=spider_results_kind)
 
     out = []
@@ -74,8 +107,11 @@ def get_full_results(client):
             'created': created.isoformat(),
             'score': entity.get('score'),
         }
+
         record.update(flatten(entity.get('meta'), parent_key='meta'))
-        record.update(flatten(entity.get('rating'), parent_key='rating'))
+        record.update(simplify_rating(flatten(entity.get('rating'), parent_key='rating')))
+        record.update(tablelize_checks(entity.get('checks')))
+
         out.append(record)
     return out
 
@@ -113,13 +149,13 @@ class CompactResults(object):
         resp.media = out
 
 
-class BigResults(object):
+class TableResults(object):
 
     def on_get(self, req, resp):
         """
         Returns big sites results
         """
-        out = get_full_results(datastore_client)
+        out = get_table_result(datastore_client)
 
         maxage = 48 * 60 * 60  # two days
         resp.cache_control = ["max_age=%d" % maxage]
@@ -201,12 +237,13 @@ app.resp_options.media_handlers = handlers
 
 app.add_route('/api/v1/spider-results/last-updated/', LastUpdated())
 app.add_route('/api/v1/spider-results/compact/', CompactResults())
-app.add_route('/api/v1/spider-results/big/', BigResults())
+app.add_route('/api/v1/spider-results/table/', TableResults())
 app.add_route('/api/v1/spider-results/site', SiteDetails())
 app.add_route('/api/v1/screenshots/site', SiteScreenshots())
 app.add_route('/', Index())
 
 
 if __name__ == '__main__':
+
     httpd = simple_server.make_server('127.0.0.1', 5000, app)
     httpd.serve_forever()
