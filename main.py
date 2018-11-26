@@ -1,3 +1,4 @@
+import collections
 from datetime import datetime
 from os import getenv
 from wsgiref import simple_server
@@ -16,34 +17,68 @@ spider_results_kind = 'spider-results'
 webscreenshots_kind = 'webscreenshot'
 
 
+def convert_datastore_datetime(field):
+    """
+    return datetime in different ways, depending on whether the lib returns
+    a str, int, or datetime.datetime
+    """
+    dt = ''
+    if type(field) == datetime:
+        dt = field
+    elif type(field) == int:
+        dt = datetime.utcfromtimestamp(field / 1000000)
+    elif type(field) == str:
+        dt = datetime.utcfromtimestamp(int(field) / 1000000)
+    return dt
+
+
+def flatten(d, parent_key='', sep='.'):
+    items = []
+    for k, v in d.items():
+        new_key = parent_key + sep + k if parent_key else k
+        if isinstance(v, collections.MutableMapping):
+            items.extend(flatten(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+
 def get_compact_results(client):
     query = client.query(kind=spider_results_kind,
-                                    order=['-created'],
-                                    #projection=['created', 'meta', 'score'],
-                                    )
+                         order=['-created'],
+                         #projection=['created', 'meta', 'score'],
+                         )
 
     out = []
     for entity in query.fetch(eventual=True):
+        created = convert_datastore_datetime(entity.get('created'))
         
-        # handle creation date in different ways, depending on whether the lib returns
-        # a str, int, or datetime.datetime
-        created = entity.get('created')
-        dt = ''
-        if type(created) == datetime:
-            dt = created
-        elif type(created) == int:
-            dt = datetime.utcfromtimestamp(created / 1000000)
-        elif type(created) == str:
-            dt = datetime.utcfromtimestamp(int(created) / 1000000)
-
         out.append({
             'input_url': entity.key.name,
-            'created': dt.isoformat(),
+            'created': created.isoformat(),
             'meta': entity.get('meta'),
             'score': entity.get('score'),
         })
     return out
-    
+
+
+def get_full_results(client):
+    query = client.query(kind=spider_results_kind)
+
+    out = []
+    for entity in query.fetch(eventual=True):
+        created = convert_datastore_datetime(entity.get('created'))
+
+        record = {
+            'input_url': entity.key.name,
+            'created': created.isoformat(),
+            'score': entity.get('score'),
+        }
+        record.update(flatten(entity.get('meta'), parent_key='meta'))
+        record.update(flatten(entity.get('rating'), parent_key='rating'))
+        out.append(record)
+    return out
+
 
 class LastUpdated(object):
 
@@ -74,6 +109,19 @@ class CompactResults(object):
         out = get_compact_results(datastore_client)
 
         maxage = 6 * 60 * 60  # six hours in seconds
+        resp.cache_control = ["max_age=%d" % maxage]
+        resp.media = out
+
+
+class BigResults(object):
+
+    def on_get(self, req, resp):
+        """
+        Returns big sites results
+        """
+        out = get_full_results(datastore_client)
+
+        maxage = 48 * 60 * 60  # two days
         resp.cache_control = ["max_age=%d" % maxage]
         resp.media = out
 
@@ -128,6 +176,20 @@ class SiteScreenshots(object):
         resp.media = entities
 
 
+class Index(object):
+    def on_get(self, req, resp):
+        resp.media = {
+            "message": "This is green-spider-api",
+            "url": "https://github.com/netzbegruenung/green-spider-api",
+            "endpoints": [
+                "/api/v1/spider-results/last-updated/",
+                "/api/v1/spider-results/big/",
+                "/api/v1/spider-results/compact/",
+                "/api/v1/spider-results/site",
+                "/api/v1/screenshots/site",
+            ]
+        }
+
 handlers = media.Handlers({
     'application/json': jsonhandler.JSONHandler(),
 })
@@ -139,8 +201,10 @@ app.resp_options.media_handlers = handlers
 
 app.add_route('/api/v1/spider-results/last-updated/', LastUpdated())
 app.add_route('/api/v1/spider-results/compact/', CompactResults())
+app.add_route('/api/v1/spider-results/big/', BigResults())
 app.add_route('/api/v1/spider-results/site', SiteDetails())
 app.add_route('/api/v1/screenshots/site', SiteScreenshots())
+app.add_route('/', Index())
 
 
 if __name__ == '__main__':
