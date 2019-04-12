@@ -175,16 +175,18 @@ class SiteDetails(object):
                                'Bad request',
                                'The parameter url must not be empty')
 
-        key = datastore_client.key(spider_results_kind, req.get_param('url'))
-        entity = datastore_client.get(key)
+        entity = es.get(index=es_index_name, doc_type=es_doc_type, id=url)
         if entity is None:
             raise falcon.HTTPError(falcon.HTTP_404,
                                'Not found',
                                'A site with this URL does not exist')
 
-        maxage = 24 * 60 * 60  # 24 hours in seconds
+        if 'url' in entity['_source']:
+            del entity['_source']['url']
+
+        maxage = 5 * 60  # 5 minutes in seconds
         resp.cache_control = ["max_age=%d" % maxage]
-        resp.media = dict(entity)
+        resp.media = entity['_source']
 
 
 class SiteScreenshots(object):
