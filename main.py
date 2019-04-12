@@ -122,17 +122,14 @@ class LastUpdated(object):
         """
         Informs about the most recent update to the spider results data
         """
-        query = datastore_client.query(kind=spider_results_kind,
-                                       order=['-created'],
-                                       projection=['created'])
-        items = list(query.fetch(limit=1, eventual=True))
-        ts = int(items[0].get('created')) / 1000000
-        dt = datetime.utcfromtimestamp(ts).isoformat()
+        res = es.search(index=es_index_name,
+            filter_path=['hits.hits._source.created'],
+            body={"query": {"match_all": {}}},
+            sort='created:desc',
+            size=1)
 
-        maxage = 60 * 60  # one hour in seconds
-        resp.cache_control = ["max_age=%d" % maxage]
         resp.media = {
-            "last_updated": dt
+            "last_updated": res['hits']['hits'][0]['_source']['created']
         }
 
 
