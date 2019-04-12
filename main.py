@@ -219,7 +219,7 @@ class Index(object):
             "url": "https://github.com/netzbegruenung/green-spider-api",
             "endpoints": [
                 "/api/v1/spider-results/last-updated/",
-                "/api/v1/spider-results/big/",
+                "/api/v1/spider-results/table/",
                 "/api/v1/spider-results/compact/",
                 "/api/v1/spider-results/site",
                 "/api/v1/screenshots/site",
