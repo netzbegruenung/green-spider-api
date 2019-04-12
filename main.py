@@ -9,13 +9,18 @@ from falcon import media
 import jsonhandler
 
 from google.cloud import datastore
+from elasticsearch import Elasticsearch
 
 credentials_path = getenv('GCLOUD_DATASTORE_CREDENTIALS_PATH')
 datastore_client = datastore.Client.from_service_account_json(credentials_path)
 
+es = Elasticsearch([{'host': 'elasticsearch', 'port': 9200}])
+
+es_doc_type = 'result'
 spider_results_kind = 'spider-results'
 webscreenshots_kind = 'webscreenshot'
 
+es_index_name = spider_results_kind
 
 def convert_datastore_datetime(field):
     """
@@ -43,10 +48,9 @@ def flatten(d, parent_key='', sep='.'):
     return dict(items)
 
 
-def get_compact_results(client):
+def get_compact_results():
     query = client.query(kind=spider_results_kind,
                          order=['-created'],
-                         #projection=['created', 'meta', 'score'],
                          )
 
     out = []
@@ -139,7 +143,7 @@ class CompactResults(object):
         """
         Returns compact sites overview and score
         """
-        out = get_compact_results(datastore_client)
+        out = get_compact_results()
 
         maxage = 6 * 60 * 60  # six hours in seconds
         resp.cache_control = ["max_age=%d" % maxage]
