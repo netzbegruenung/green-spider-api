@@ -48,24 +48,6 @@ def flatten(d, parent_key='', sep='.'):
     return dict(items)
 
 
-def get_compact_results():
-    query = client.query(kind=spider_results_kind,
-                         order=['-created'],
-                         )
-
-    out = []
-    for entity in query.fetch(eventual=True):
-        created = convert_datastore_datetime(entity.get('created'))
-        
-        out.append({
-            'input_url': entity.key.name,
-            'created': created.isoformat(),
-            'meta': entity.get('meta'),
-            'score': entity.get('score'),
-        })
-    return out
-
-
 def simplify_rating(d):
     """
     Removes some keys from a flattened rating dict
@@ -223,7 +205,6 @@ class Index(object):
             "endpoints": [
                 "/api/v1/spider-results/last-updated/",
                 "/api/v1/spider-results/table/",
-                "/api/v1/spider-results/compact/",
                 "/api/v1/spider-results/site",
                 "/api/v1/screenshots/site",
             ]
