@@ -109,7 +109,7 @@ class LastUpdated(object):
         Informs about the most recent update to the spider results data
         """
         res = es.search(index=es_index_name,
-            filter_path=['hits.hits._source.created'],
+            _source_include=['created'],
             body={"query": {"match_all": {}}},
             sort='created:desc',
             size=1)
@@ -117,19 +117,6 @@ class LastUpdated(object):
         resp.media = {
             "last_updated": res['hits']['hits'][0]['_source']['created']
         }
-
-
-class CompactResults(object):
-
-    def on_get(self, req, resp):
-        """
-        Returns compact sites overview and score
-        """
-        out = get_compact_results()
-
-        maxage = 6 * 60 * 60  # six hours in seconds
-        resp.cache_control = ["max_age=%d" % maxage]
-        resp.media = out
 
 
 class TableResults(object):
@@ -143,6 +130,70 @@ class TableResults(object):
         maxage = 48 * 60 * 60  # two days
         resp.cache_control = ["max_age=%d" % maxage]
         resp.media = out
+
+
+class SpiderResultsQuery(object):
+
+    def on_get(self, req, resp):
+        """
+        Queries the ES index for sites matching a term
+        """
+        query_term = req.get_param('q', default='')
+        from_num = req.get_param('from', default='0')
+
+        try:
+            from_num = int(from_num)
+        except Exception:
+            raise falcon.HTTPError(falcon.HTTP_400,
+                               'Bad request',
+                               'The parameter "from" bust be an integer.')
+
+        res = es.search(index=es_index_name,
+            _source_include=['created', 'meta', 'rating', 'score', 'url'],
+            body={
+                "query": {
+                    "query_string": {
+                        "query": query_term,
+                        "default_operator": "AND",
+                    }
+                }
+            },
+            from_=from_num,
+            size=20,
+            sort='score:desc')
+        resp.media = {
+            "hits": res['hits']
+        }
+
+
+class SpiderResultsCount(object):
+
+    def on_get(self, req, resp):
+        """
+        Returns the number of items in the spider-results ES index
+        """
+        query_term = req.get_param('q')
+        body = {"query": {"match_all" : {}}}
+        if query_term is not None:
+            body = {
+                "query": {
+                    "bool" : {
+                        "must" : {
+                            "query_string" : {
+                                "query" : query_term
+                            }
+                        }
+                    }
+                }
+            }
+            
+        res = es.search(index=es_index_name, body=body, size=0)
+        
+        maxage = 5 * 60  # 5 minutes in seconds
+        resp.cache_control = ["max_age=%d" % maxage]
+        resp.media = {
+            "count": res['hits']['total']
+        }
 
 
 class SiteDetails(object):
@@ -164,8 +215,7 @@ class SiteDetails(object):
                                'Not found',
                                'A site with this URL does not exist')
 
-        if 'url' in entity['_source']:
-            del entity['_source']['url']
+        entity['_source']['url'] = entity['_id']
 
         maxage = 5 * 60  # 5 minutes in seconds
         resp.cache_control = ["max_age=%d" % maxage]
@@ -203,6 +253,7 @@ class Index(object):
             "message": "This is green-spider-api",
             "url": "https://github.com/netzbegruenung/green-spider-api",
             "endpoints": [
+                "/api/v1/spider-results/count/",
                 "/api/v1/spider-results/last-updated/",
                 "/api/v1/spider-results/table/",
                 "/api/v1/spider-results/site",
@@ -220,8 +271,9 @@ app.req_options.media_handlers = handlers
 app.resp_options.media_handlers = handlers
 
 app.add_route('/api/v1/spider-results/last-updated/', LastUpdated())
-app.add_route('/api/v1/spider-results/compact/', CompactResults())
 app.add_route('/api/v1/spider-results/table/', TableResults())
+app.add_route('/api/v1/spider-results/query/', SpiderResultsQuery())
+app.add_route('/api/v1/spider-results/count/', SpiderResultsCount())
 app.add_route('/api/v1/spider-results/site', SiteDetails())
 app.add_route('/api/v1/screenshots/site', SiteScreenshots())
 app.add_route('/', Index())
