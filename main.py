@@ -9,13 +9,18 @@ from falcon import media
 import jsonhandler
 
 from google.cloud import datastore
+from elasticsearch import Elasticsearch
 
 credentials_path = getenv('GCLOUD_DATASTORE_CREDENTIALS_PATH')
 datastore_client = datastore.Client.from_service_account_json(credentials_path)
 
+es = Elasticsearch([{'host': 'elasticsearch', 'port': 9200}])
+
+es_doc_type = 'result'
 spider_results_kind = 'spider-results'
 webscreenshots_kind = 'webscreenshot'
 
+es_index_name = spider_results_kind
 
 def convert_datastore_datetime(field):
     """
@@ -41,25 +46,6 @@ def flatten(d, parent_key='', sep='.'):
         else:
             items.append((new_key, v))
     return dict(items)
-
-
-def get_compact_results(client):
-    query = client.query(kind=spider_results_kind,
-                         order=['-created'],
-                         #projection=['created', 'meta', 'score'],
-                         )
-
-    out = []
-    for entity in query.fetch(eventual=True):
-        created = convert_datastore_datetime(entity.get('created'))
-        
-        out.append({
-            'input_url': entity.key.name,
-            'created': created.isoformat(),
-            'meta': entity.get('meta'),
-            'score': entity.get('score'),
-        })
-    return out
 
 
 def simplify_rating(d):
@@ -122,31 +108,15 @@ class LastUpdated(object):
         """
         Informs about the most recent update to the spider results data
         """
-        query = datastore_client.query(kind=spider_results_kind,
-                                       order=['-created'],
-                                       projection=['created'])
-        items = list(query.fetch(limit=1, eventual=True))
-        ts = int(items[0].get('created')) / 1000000
-        dt = datetime.utcfromtimestamp(ts).isoformat()
+        res = es.search(index=es_index_name,
+            _source_include=['created'],
+            body={"query": {"match_all": {}}},
+            sort='created:desc',
+            size=1)
 
-        maxage = 60 * 60  # one hour in seconds
-        resp.cache_control = ["max_age=%d" % maxage]
         resp.media = {
-            "last_updated": dt
+            "last_updated": res['hits']['hits'][0]['_source']['created']
         }
-
-
-class CompactResults(object):
-
-    def on_get(self, req, resp):
-        """
-        Returns compact sites overview and score
-        """
-        out = get_compact_results(datastore_client)
-
-        maxage = 6 * 60 * 60  # six hours in seconds
-        resp.cache_control = ["max_age=%d" % maxage]
-        resp.media = out
 
 
 class TableResults(object):
@@ -162,6 +132,70 @@ class TableResults(object):
         resp.media = out
 
 
+class SpiderResultsQuery(object):
+
+    def on_get(self, req, resp):
+        """
+        Queries the ES index for sites matching a term
+        """
+        query_term = req.get_param('q', default='')
+        from_num = req.get_param('from', default='0')
+
+        try:
+            from_num = int(from_num)
+        except Exception:
+            raise falcon.HTTPError(falcon.HTTP_400,
+                               'Bad request',
+                               'The parameter "from" bust be an integer.')
+
+        res = es.search(index=es_index_name,
+            _source_include=['created', 'meta', 'rating', 'score', 'url'],
+            body={
+                "query": {
+                    "query_string": {
+                        "query": query_term,
+                        "default_operator": "AND",
+                    }
+                }
+            },
+            from_=from_num,
+            size=20,
+            sort='score:desc')
+        resp.media = {
+            "hits": res['hits']
+        }
+
+
+class SpiderResultsCount(object):
+
+    def on_get(self, req, resp):
+        """
+        Returns the number of items in the spider-results ES index
+        """
+        query_term = req.get_param('q')
+        body = {"query": {"match_all" : {}}}
+        if query_term is not None:
+            body = {
+                "query": {
+                    "bool" : {
+                        "must" : {
+                            "query_string" : {
+                                "query" : query_term
+                            }
+                        }
+                    }
+                }
+            }
+            
+        res = es.search(index=es_index_name, body=body, size=0)
+        
+        maxage = 5 * 60  # 5 minutes in seconds
+        resp.cache_control = ["max_age=%d" % maxage]
+        resp.media = {
+            "count": res['hits']['total']
+        }
+
+
 class SiteDetails(object):
 
     def on_get(self, req, resp):
@@ -175,16 +209,17 @@ class SiteDetails(object):
                                'Bad request',
                                'The parameter url must not be empty')
 
-        key = datastore_client.key(spider_results_kind, req.get_param('url'))
-        entity = datastore_client.get(key)
+        entity = es.get(index=es_index_name, doc_type=es_doc_type, id=url)
         if entity is None:
             raise falcon.HTTPError(falcon.HTTP_404,
                                'Not found',
                                'A site with this URL does not exist')
 
-        maxage = 24 * 60 * 60  # 24 hours in seconds
+        entity['_source']['url'] = entity['_id']
+
+        maxage = 5 * 60  # 5 minutes in seconds
         resp.cache_control = ["max_age=%d" % maxage]
-        resp.media = dict(entity)
+        resp.media = entity['_source']
 
 
 class SiteScreenshots(object):
@@ -218,9 +253,9 @@ class Index(object):
             "message": "This is green-spider-api",
             "url": "https://github.com/netzbegruenung/green-spider-api",
             "endpoints": [
+                "/api/v1/spider-results/count/",
                 "/api/v1/spider-results/last-updated/",
-                "/api/v1/spider-results/big/",
-                "/api/v1/spider-results/compact/",
+                "/api/v1/spider-results/table/",
                 "/api/v1/spider-results/site",
                 "/api/v1/screenshots/site",
             ]
@@ -236,8 +271,9 @@ app.req_options.media_handlers = handlers
 app.resp_options.media_handlers = handlers
 
 app.add_route('/api/v1/spider-results/last-updated/', LastUpdated())
-app.add_route('/api/v1/spider-results/compact/', CompactResults())
 app.add_route('/api/v1/spider-results/table/', TableResults())
+app.add_route('/api/v1/spider-results/query/', SpiderResultsQuery())
+app.add_route('/api/v1/spider-results/count/', SpiderResultsCount())
 app.add_route('/api/v1/spider-results/site', SiteDetails())
 app.add_route('/api/v1/screenshots/site', SiteScreenshots())
 app.add_route('/', Index())
