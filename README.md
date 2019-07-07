@@ -18,23 +18,30 @@ Gibt den Zeitpunkt der letzten Aktualisierung der Spider-Ergebnisse zurück.
 }
 ```
 
-### `GET /api/v1/spider-results/compact/`
+### `GET /api/v1/spider-results/table/`
 
-Gibt die kompakte Liste aller Sites aus. Diese enthält nur die Details, die für eine Übersicht benötigt werden.
+Gibt Ergebnisse für alle Sites in einem tabellenfreundlichen Format aus.
 
 ```json
 [
   {
-    "input_url": "https://www.gruenekoeln.de/bezirke/bezirk7.html",
-    "created": "2018-10-31T01:21:03.361931+00:00",
-    "meta": {
-      "level": "DE:ORTSVERBAND",
-      "state": "Nordrhein-Westfalen",
-      "type": "REGIONAL_CHAPTER",
-      "city": "Köln-Porz/Poll",
-      "district": "Köln"
-    },
-    "score": 11.5
+    "input_url": "http://die-gruenen-burscheid.de/",
+    "created": "2019-07-05T17:42:00.884759+00:00",
+    "score": 12.5,
+    "meta.type": "REGIONAL_CHAPTER",
+    "meta.city": "Burscheid",
+    "meta.district": "Rheinisch-Bergischer Kreis",
+    "meta.level": "DE:ORTSVERBAND",
+    "meta.state": "Nordrhein-Westfalen",
+    "rating.FEEDS.value": true,
+    "rating.FEEDS.score": 1,
+    "rating.HTTP_RESPONSE_DURATION.score": 0.5,
+    "rating.HTTP_RESPONSE_DURATION.value": 425,
+    ...
+    "rating.SITE_REACHABLE.value": true,
+    "rating.SITE_REACHABLE.score": 1,
+    "generator": "wordpress-urwahl",
+    "resulting_urls": "http://die-gruenen-burscheid.de/"
   },
   ...
 ]
