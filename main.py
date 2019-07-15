@@ -1,7 +1,9 @@
 import collections
+import csv
+import io
+import sys
 from datetime import datetime
 from os import getenv
-import sys
 from wsgiref import simple_server
 
 import falcon
@@ -129,7 +131,23 @@ class TableResults(object):
 
         maxage = 48 * 60 * 60  # two days
         resp.cache_control = ["max_age=%d" % maxage]
-        resp.media = out
+        if req.accept == 'text/csv':
+            # return CSV
+            headers = sorted(out[0].keys())
+
+            with io.StringIO(newline='\n') as csvfile:
+                writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(headers)
+                for row in out:
+                    o = []
+                    for f in headers:
+                        o.append(str(row[f]))
+                    writer.writerow(o)
+                resp.body = csvfile.getvalue()
+            resp.content_type = 'text/csv'
+            resp.status = falcon.HTTP_200
+        else:
+            resp.media = out
 
 
 class SpiderResultsQuery(object):
@@ -263,6 +281,7 @@ class Index(object):
 
 handlers = media.Handlers({
     'application/json': jsonhandler.JSONHandler(),
+    'text/csv': media.BaseHandler,
 })
 
 app = falcon.API()
