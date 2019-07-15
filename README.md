@@ -22,6 +22,9 @@ Gibt den Zeitpunkt der letzten Aktualisierung der Spider-Ergebnisse zurück.
 
 Gibt Ergebnisse für alle Sites in einem tabellenfreundlichen Format aus.
 
+Wenn per `Accept`-Header der Typ `text/csv` angefordert wird, erfolgt die Ausgabe
+im CSV-Format. Ansonsten wird JSON ausgegeben.
+
 ```json
 [
   {
