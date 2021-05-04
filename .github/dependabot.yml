@@ -1,0 +1,43 @@
+version: 2
+updates:
+- package-ecosystem: pip
+  directory: "/"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: elasticsearch
+    versions:
+    - ">= 7.a, < 8"
+  - dependency-name: protobuf
+    versions:
+    - 3.14.0
+    - 3.15.0
+    - 3.15.1
+    - 3.15.2
+    - 3.15.3
+    - 3.15.4
+    - 3.15.5
+    - 3.15.6
+    - 3.15.7
+  - dependency-name: grpcio
+    versions:
+    - 1.35.0
+    - 1.36.0
+    - 1.36.1
+  - dependency-name: rsa
+    versions:
+    - "4.7"
+    - 4.7.1
+  - dependency-name: urllib3
+    versions:
+    - 1.26.3
+  - dependency-name: cachetools
+    versions:
+    - 4.2.1
+  - dependency-name: isort
+    versions:
+    - 5.7.0
+  - dependency-name: falcon
+    versions:
+    - 2.0.0
