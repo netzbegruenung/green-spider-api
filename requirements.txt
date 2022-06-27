@@ -1,7 +1,7 @@
 astroid==2.0.4
 cachetools==2.1.0
 certifi==2018.10.15
-chardet==3.0.4
+chardet==5.0.0
 elasticsearch==6.3.1
 falcon==1.4.1
 google-api-core==1.5.1
