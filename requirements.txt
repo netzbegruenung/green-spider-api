@@ -20,7 +20,7 @@ pyasn1-modules==0.2.2
 pyasn1==0.4.4
 pylint==2.1.1
 python-mimeparse==1.6.0
-pytz==2018.7
+pytz==2022.5
 requests==2.20.0
 rsa==4.0
 six==1.11.0
